@@ -78,11 +78,14 @@ def fetch_reservoir_info(reservoir):
                 "fechaIni": fecha_ini,
                 "fechaFin": fecha_fin,
                 "metaData": {pct_key: pct_meta},
-                "senalesSeleccionadas": pct_meta["TAG"],
+                "senalesSeleccionadas": [pct_meta["TAG"]],
                 "tipoConsolidado": meta_json["tipoConsolidado"],
             }
             data_url = f"{BASE_URL}/api/datos-graficas/obtenerGraficaHistorica"
             resp = session.post(data_url, json=payload, timeout=60)
+            print("STATUS:", resp.status_code)
+            print("HEADERS:", resp.headers)
+            print("BODY:", resp.text[:1000])  # first 1000 chars
             if resp.status_code == 200:
                 data_json = resp.json()
                 if pct_key in data_json:
