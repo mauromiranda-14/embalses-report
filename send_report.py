@@ -183,6 +183,7 @@ async def main():
         context = await browser.new_context(
             viewport={"width": 1400, "height": 860},
             locale="es-ES",
+                        ignore_https_errors=True,
         )
         page = await context.new_page()
 
