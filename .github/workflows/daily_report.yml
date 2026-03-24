@@ -7,7 +7,7 @@ on:
 
 jobs:
   send-report:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 10
 
     steps:
@@ -25,7 +25,7 @@ jobs:
       - name: Install Playwright browser
         run: |
           playwright install chromium
-          playwright install-deps chromium
+          playwright install-deps
 
       - name: Run daily report
         env:
