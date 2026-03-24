@@ -203,10 +203,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-```
-
----
-
-## File 2: `requirements.txt`
-```
-playwright==1.44.0
