@@ -40,7 +40,7 @@ async def capture_reservoir(page, reservoir: dict) -> dict:
             const charts = window.Highcharts?.charts?.filter(c => c && c.series?.length > 0);
             return charts && charts.length > 0 && charts[0].series[0].data.length > 0;
         }""",
-        timeout=30_000,
+        timeout=60_000,
     )
 
     # Extract latest value and 24h-ago value from Highcharts
