@@ -1,206 +1,234 @@
-import asyncio
+import io
 import os
 import smtplib
-from datetime import datetime
+from datetime import datetime, timedelta
 from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
-from playwright.async_api import async_playwright
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+import requests
+import urllib3
 
-# ── Configuration (loaded from environment variables / GitHub Secrets) ───────
+# -- Configuration
 EMAIL_SENDER   = os.environ["EMAIL_SENDER"]
 EMAIL_PASSWORD = os.environ["EMAIL_PASSWORD"]
 EMAIL_RECEIVER = os.environ["EMAIL_RECEIVER"]
-SMTP_HOST      = os.environ.get("SMTP_HOST", "smtp.gmail.com")
-SMTP_PORT      = int(os.environ.get("SMTP_PORT", "587"))
+SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
+
+BASE_URL = "https://saihebro.org"
+HEADERS  = {"User-Agent": "Mozilla/5.0 (compatible; embalses-report/1.0)"}
 
 RESERVOIRS = [
     {
-        "name": "Rialb Embalse",
-        "url":  "https://saihebro.org/tiempo-real/grafica-senal-E076O82PORCE--volumen-embalse-rialb",
-        "cid":  "chart_rialb",
+        "name":  "Rialb Embalse",
+        "tag":   "E076O82PORCE",
+        "label": "% Volumen Embalse Rialb",
+        "color": "#800080",
+        "cid":   "chart_rialb",
+        "url":   "https://saihebro.org/tiempo-real/grafica-senal-E076O82PORCE--volumen-embalse-rialb",
     },
     {
-        "name": "Oliana SAI",
-        "url":  "https://saihebro.org/tiempo-real/grafica-senal-E062O82PORCE--volumen-embalse-oliana",
-        "cid":  "chart_oliana",
+        "name":  "Oliana SAI",
+        "tag":   "E062O82PORCE",
+        "label": "% Volumen Embalse Oliana",
+        "color": "#800080",
+        "cid":   "chart_oliana",
+        "url":   "https://saihebro.org/tiempo-real/grafica-senal-E062O82PORCE--volumen-embalse-oliana",
     },
 ]
 
 
-async def capture_reservoir(page, reservoir: dict) -> dict:
-    """Navigate to a reservoir chart page, extract data and take a screenshot."""
-    print(f"  -> Loading {reservoir['name']} ...")
-    await page.goto(reservoir["url"], wait_until="networkidle", timeout=60_000)
+def fetch_reservoir_data(reservoir):
+    tag = reservoir["tag"]
+    print(f"--> Fetching data for {reservoir['name']} (tag={tag})")
 
-    # Wait until Highcharts has rendered at least one data point
-    await page.wait_for_function(
-        """() => {
-            const charts = window.Highcharts?.charts?.filter(c => c && c.series?.length > 0);
-            return charts && charts.length > 0 && charts[0].series[0].data.length > 0;
-        }""",
-        timeout=60_000,
-    )
+    # Step 1: get metadata (date range + signal info)
+    meta_url = f"{BASE_URL}/api/grafica/getMetaDatosSenalesEstacion?tag={tag}&cambio_periodo=7"
+    meta = requests.get(meta_url, headers=HEADERS, verify=False, timeout=30)
+    meta.raise_for_status()
+    meta_json = meta.json()
 
-    # Extract latest value and 24h-ago value from Highcharts
-    data = await page.evaluate(
-        """() => {
-            const chart  = window.Highcharts.charts.find(c => c && c.series?.length > 0);
-            const series = chart.series[0];
-            const pts    = series.data;
-            const last   = pts[pts.length - 1];
-            const prev24 = pts[Math.max(0, pts.length - 96)];
+    fecha_ini = meta_json["fechaIni"]
+    fecha_fin = meta_json["fechaFin"]
+    senales   = meta_json["senalesSeleccionadas"]
+    tipo_cons = meta_json["tipoConsolidado"]
 
-            const daily = {};
-            pts.forEach(p => {
-                const day = new Date(p.x).toLocaleDateString('es-ES');
-                daily[day] = p.y;
-            });
+    # Build metaData for just the percentage signal
+    pct_key = f"{tag}|VALOR"
+    pct_meta = meta_json["metaData"].get(pct_key)
+    if pct_meta is None:
+        for k, v in meta_json["metaData"].items():
+            if v.get("LS_UNID_ING") == "%":
+                pct_key = k
+                pct_meta = v
+                break
 
-            return {
-                seriesName:  series.name,
-                chartTitle:  chart.title.textStr,
-                latestValue: last?.y   ?? null,
-                latestTime:  last  ? new Date(last.x).toLocaleString('es-ES') : null,
-                value24hAgo: prev24?.y ?? null,
-                dailySummary: daily,
-            };
-        }"""
-    )
+    if pct_meta is None:
+        raise ValueError(f"No percentage signal found for {tag}")
 
-    screenshot_bytes = await page.screenshot(full_page=False)
-    print(f"     OK  {data['seriesName']}: {data['latestValue']}% at {data['latestTime']}")
-    return {"meta": data, "screenshot": screenshot_bytes, "cid": reservoir["cid"]}
+    # Step 2: POST to get actual time-series data
+    payload = {
+        "fechaIni": fecha_ini,
+        "fechaFin": fecha_fin,
+        "metaData": {pct_key: pct_meta},
+        "senalesSeleccionadas": pct_meta["TAG"],
+        "tipoConsolidado": tipo_cons,
+    }
+    data_url = f"{BASE_URL}/api/datos-graficas/obtenerGraficaHistorica"
+    resp = requests.post(data_url, json=payload, headers=HEADERS, verify=False, timeout=60)
+    resp.raise_for_status()
+    data_json = resp.json()
+
+    # Check for API-level errors
+    if isinstance(data_json, dict) and "errMessage" in data_json and data_json.get("errNumber", 0) != 0:
+        raise RuntimeError(f"API error: {data_json['errMessage']}")
+
+    # Extract time series
+    series_data = data_json.get(pct_key, {})
+    datos = series_data.get("DATOS", [])
+    if not datos:
+        raise RuntimeError(f"No DATOS found in response for {pct_key}")
+
+    timestamps = [datetime.fromtimestamp(d[0] / 1000) for d in datos]
+    values = [d[1] for d in datos]
+
+    latest_val = values[-1] if values else None
+    description = series_data.get("LS_DESCRIPCION", reservoir["label"])
+
+    return {
+        "name": reservoir["name"],
+        "tag": tag,
+        "label": description,
+        "color": reservoir["color"],
+        "cid": reservoir["cid"],
+        "url": reservoir["url"],
+        "timestamps": timestamps,
+        "values": values,
+        "latest": latest_val,
+        "fecha_ini": fecha_ini,
+        "fecha_fin": fecha_fin,
+    }
 
 
-def trend_arrow(current, previous) -> str:
-    if previous is None or current is None:
-        return "-"
-    diff = current - previous
+def make_chart(result):
+    fig, ax = plt.subplots(figsize=(10, 4))
+    ax.plot(result["timestamps"], result["values"],
+            color=result["color"], linewidth=1.5)
+    ax.set_title(f"{result['label']}  ({result['fecha_ini']} - {result['fecha_fin']})",
+                 fontsize=12, fontweight="bold")
+    ax.set_ylabel("%")
+    ax.set_ylim(0, 110)
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%d/%m"))
+    ax.xaxis.set_major_locator(mdates.DayLocator())
+    fig.autofmt_xdate(rotation=45)
+    ax.grid(True, alpha=0.3)
+
+    if result["latest"] is not None:
+        ax.annotate(f'{result["latest"]:.2f}%',
+                    xy=(result["timestamps"][-1], result["latest"]),
+                    fontsize=11, fontweight="bold", color=result["color"],
+                    xytext=(10, 10), textcoords="offset points")
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=120, bbox_inches="tight")
+    plt.close(fig)
+    buf.seek(0)
+    return buf.read()
+
+
+def trend_arrow(values):
+    if len(values) < 2:
+        return ""
+    diff = values[-1] - values[0]
     if diff > 0.5:
-        return f"+{diff:.2f}%"
+        return "\u2191"
     elif diff < -0.5:
-        return f"{diff:.2f}%"
-    return f"{diff:+.2f}%"
+        return "\u2193"
+    return "\u2192"
 
 
-def build_html_email(results: list) -> str:
-    today = datetime.now().strftime("%A, %d %B %Y - %H:%M")
-
+def build_html(results):
     rows = ""
     for r in results:
-        m     = r["meta"]
-        trend = trend_arrow(m["latestValue"], m["value24hAgo"])
-        val   = m["latestValue"] or 0
-        color = "#2e7d32" if val >= 70 else ("#f57c00" if val >= 40 else "#c62828")
+        arrow = trend_arrow(r["values"])
         rows += f"""
         <tr>
-          <td style="padding:12px 16px;font-weight:bold;font-size:15px">{m['chartTitle']}</td>
-          <td style="padding:12px 16px;text-align:center;font-size:22px;font-weight:bold;color:{color}">
-            {m['latestValue']:.2f}%
-          </td>
-          <td style="padding:12px 16px;text-align:center;color:#555">{trend} (24h)</td>
-          <td style="padding:12px 16px;text-align:center;color:#777;font-size:12px">{m['latestTime']}</td>
-        </tr>"""
+            <td style="padding:8px;border:1px solid #ddd;"><b>{r['name']}</b></td>
+            <td style="padding:8px;border:1px solid #ddd;text-align:center;font-size:20px;">
+                {r['latest']:.2f}% {arrow}
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2" style="padding:8px;border:1px solid #ddd;text-align:center;">
+                <img src="cid:{r['cid']}" style="max-width:100%;" />
+            </td>
+        </tr>
+        """
 
-    chart_imgs = ""
-    for r in results:
-        chart_imgs += f"""
-        <div style="margin-bottom:28px">
-          <h3 style="margin:0 0 8px;color:#1a237e">{r['meta']['chartTitle']}</h3>
-          <img src="cid:{r['cid']}" style="max-width:100%;border:1px solid #ddd;border-radius:4px"/>
-          <p style="font-size:11px;color:#999;margin:4px 0 0">
-            Fuente: <a href="https://saihebro.org">saihebro.org</a> &middot; Datos quinceminutales (ultimos 7 dias)
-          </p>
-        </div>"""
-
-    return f"""<!DOCTYPE html>
-<html>
-<body style="font-family:Arial,sans-serif;max-width:960px;margin:auto;padding:20px;color:#222">
-
-  <div style="background:#1a237e;color:#fff;padding:18px 24px;border-radius:6px 6px 0 0">
-    <h2 style="margin:0">Informe Diario de Embalses - SAIH Ebro</h2>
-    <p  style="margin:4px 0 0;opacity:.8;font-size:13px">{today}</p>
-  </div>
-
-  <table style="width:100%;border-collapse:collapse;border:1px solid #ddd;border-top:none">
-    <thead>
-      <tr style="background:#e8eaf6;font-size:13px">
-        <th style="padding:10px 16px;text-align:left">Embalse</th>
-        <th style="padding:10px 16px">% Volumen actual</th>
-        <th style="padding:10px 16px">Variacion (24h)</th>
-        <th style="padding:10px 16px">Ultima lectura</th>
-      </tr>
-    </thead>
-    <tbody>{rows}</tbody>
-  </table>
-
-  <div style="margin-top:36px">{chart_imgs}</div>
-
-  <p style="font-size:11px;color:#aaa;margin-top:24px;border-top:1px solid #eee;padding-top:12px">
-    Informe generado automaticamente &middot;
-    Sistema Automatico de Informacion Hidrologica del Ebro &middot;
-    <a href="https://saihebro.org">saihebro.org</a>
-  </p>
-</body>
-</html>"""
+    html = f"""
+    <html><body style="font-family:Arial,sans-serif;">
+    <h2>Embalses Rialb &amp; Oliana - Informe Diario</h2>
+    <p>Fecha: {datetime.now().strftime('%d/%m/%Y %H:%M')}</p>
+    <table style="border-collapse:collapse;width:100%;">
+        <tr style="background:#2a7ab5;color:white;">
+            <th style="padding:8px;border:1px solid #ddd;">Embalse</th>
+            <th style="padding:8px;border:1px solid #ddd;">% Volumen</th>
+        </tr>
+        {rows}
+    </table>
+    <p style="font-size:11px;color:#888;">
+        Fuente: <a href="https://saihebro.org">SAIH Ebro</a> |
+        Generado automaticamente por embalses-report
+    </p>
+    </body></html>
+    """
+    return html
 
 
-def send_email(subject: str, html_body: str, images: list):
-    msg            = MIMEMultipart("related")
+def send_email(subject, html, images):
+    msg = MIMEMultipart("related")
     msg["Subject"] = subject
     msg["From"]    = EMAIL_SENDER
     msg["To"]      = EMAIL_RECEIVER
+    msg.attach(MIMEText(html, "html"))
 
-    alt = MIMEMultipart("alternative")
-    msg.attach(alt)
-    alt.attach(MIMEText(html_body, "html", "utf-8"))
-
-    for img_bytes, cid in images:
-        img = MIMEImage(img_bytes, "png")
+    for png_bytes, cid in images:
+        img = MIMEImage(png_bytes, _subtype="png")
         img.add_header("Content-ID", f"<{cid}>")
-        img.add_header("Content-Disposition", "inline")
+        img.add_header("Content-Disposition", "inline", filename=f"{cid}.png")
         msg.attach(img)
 
-    print(f"  -> Sending email to {EMAIL_RECEIVER} ...")
-    with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as smtp:
-        smtp.starttls()
-        smtp.login(EMAIL_SENDER, EMAIL_PASSWORD)
-        smtp.sendmail(EMAIL_SENDER, EMAIL_RECEIVER, msg.as_string())
-    print("  OK  Email sent successfully!")
+    with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+        server.starttls()
+        server.login(EMAIL_SENDER, EMAIL_PASSWORD)
+        server.sendmail(EMAIL_SENDER, EMAIL_RECEIVER, msg.as_string())
+    print(f"    Email sent to {EMAIL_RECEIVER}")
 
 
-async def main():
+def main():
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
     print("=== SAIH Ebro Daily Reservoir Report ===")
     results = []
 
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(
-            headless=True,
-            args=["--no-sandbox", "--disable-dev-shm-usage"],
-        )
-        context = await browser.new_context(
-            viewport={"width": 1400, "height": 860},
-            locale="es-ES",
-                        ignore_https_errors=True,
-        )
-        page = await context.new_page()
-
-        for reservoir in RESERVOIRS:
-            result = await capture_reservoir(page, reservoir)
-            results.append(result)
-
-        await browser.close()
+    for reservoir in RESERVOIRS:
+        result = fetch_reservoir_data(reservoir)
+        result["chart_png"] = make_chart(result)
+        results.append(result)
 
     today_str = datetime.now().strftime("%d/%m/%Y")
-    subject   = f"Embalses Rialb & Oliana - {today_str}"
-    html      = build_html_email(results)
-    images    = [(r["screenshot"], r["cid"]) for r in results]
+    subject = f"Embalses Rialb & Oliana - {today_str}"
+    html = build_html(results)
+    images = [(r["chart_png"], r["cid"]) for r in results]
 
     send_email(subject, html, images)
     print("=== Done ===")
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
