@@ -16,8 +16,12 @@ SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
 
 BASE_URL = "https://saihebro.org"
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (compatible; embalses-report/1.0)",
-    "X-Requested-With": "XMLHttpRequest",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "es-ES,es;q=0.9",
+    "Referer": "https://saihebro.org/",
+    "Origin": "https://saihebro.org",
+    "Connection": "keep-alive",
 }
 
 RESERVOIRS = [
@@ -43,7 +47,10 @@ def fetch_reservoir_info(reservoir):
     session = requests.Session()
     session.headers.update(HEADERS)
     session.verify = False
-
+    
+    # Establish session (get cookies like a browser)
+    session.get(reservoir["url"], timeout=30)
+    
     # Get metadata (date range + signal descriptions)
     meta_url = f"{BASE_URL}/api/grafica/getMetaDatosSenalesEstacion?tag={tag}&cambio_periodo=7"
     meta = session.get(meta_url, timeout=30)
