@@ -21,7 +21,14 @@ SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com")
 SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
 
 BASE_URL = "https://saihebro.org"
-HEADERS  = {"User-Agent": "Mozilla/5.0 (compatible; embalses-report/1.0)", "X-Requested-With": "XMLHttpRequest"}
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "X-Requested-With": "XMLHttpRequest",
+    "Origin": "https://saihebro.org",
+    "Referer": "https://saihebro.org/",
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
+}
 
 RESERVOIRS = [
     {
@@ -47,15 +54,21 @@ def fetch_reservoir_data(reservoir):
     tag = reservoir["tag"]
     print(f"--> Fetching data for {reservoir['name']} (tag={tag})")
 
+    session = requests.Session()
+    session.headers.update(HEADERS)
+    session.verify = False
+
+    # Step 0: visit the main page to get any session cookies
+    session.get(f"{BASE_URL}/tiempo-real/grafica-senal-{tag}", timeout=30)
+
     # Step 1: get metadata (date range + signal info)
     meta_url = f"{BASE_URL}/api/grafica/getMetaDatosSenalesEstacion?tag={tag}&cambio_periodo=7"
-    meta = requests.get(meta_url, headers=HEADERS, verify=False, timeout=30)
+    meta = session.get(meta_url, timeout=30)
     meta.raise_for_status()
     meta_json = meta.json()
 
     fecha_ini = meta_json["fechaIni"]
     fecha_fin = meta_json["fechaFin"]
-    senales   = meta_json["senalesSeleccionadas"]
     tipo_cons = meta_json["tipoConsolidado"]
 
     # Build metaData for just the percentage signal
@@ -80,7 +93,8 @@ def fetch_reservoir_data(reservoir):
         "tipoConsolidado": tipo_cons,
     }
     data_url = f"{BASE_URL}/api/datos-graficas/obtenerGraficaHistorica"
-    resp = requests.post(data_url, json=payload, headers=HEADERS, verify=False, timeout=60)
+    resp = session.post(data_url, json=payload, timeout=60)
+    print(f"    POST status: {resp.status_code}")
     resp.raise_for_status()
     data_json = resp.json()
 
