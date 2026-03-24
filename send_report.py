@@ -21,7 +21,7 @@ SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com")
 SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
 
 BASE_URL = "https://saihebro.org"
-HEADERS  = {"User-Agent": "Mozilla/5.0 (compatible; embalses-report/1.0)"}
+HEADERS  = {"User-Agent": "Mozilla/5.0 (compatible; embalses-report/1.0)", "X-Requested-With": "XMLHttpRequest"}
 
 RESERVOIRS = [
     {
