@@ -29,6 +29,7 @@ RESERVOIRS = [
         "name": "Rialb Embalse",
         "tag": "E076O82PORCE",
         "nivel_tag": "E076O17NEMBA",
+        "station": "E076",
         "label": "% Volumen Embalse Rialb",
         "url": "https://saihebro.org/tiempo-real/grafica-senal-E076O82PORCE--volumen-embalse-rialb",
     },
@@ -36,6 +37,7 @@ RESERVOIRS = [
         "name": "Oliana SAI",
         "tag": "E062O82PORCE",
         "nivel_tag": "E062O17NEMBA",
+        "station": "E062",
         "label": "% Volumen Embalse Oliana",
         "url": "https://saihebro.org/tiempo-real/grafica-senal-E062O82PORCE--volumen-embalse-oliana",
     },
@@ -59,9 +61,41 @@ LA_COHILLA = {
 }
 
 
-def fetch_reservoir_info(reservoir):
+def fetch_volumenes_embalsados():
+    """Fetch current % volume for all SAIH Ebro reservoirs via GET endpoint.
+
+    Returns a dict keyed by station code (e.g. "E076") with the current
+    percentage volume and absolute volume in hm3.
+    This endpoint is a simple GET and works from cloud IPs.
+    """
+    url = f"{BASE_URL}/api/principal/getVolumenesEmbalsados"
+    print("--> Fetching volumenes embalsados (GET fallback)")
+    try:
+        resp = requests.get(url, headers=HEADERS, timeout=30, verify=False)
+        resp.raise_for_status()
+        data = resp.json()
+        result = {}
+        for key, val in data.get("volumenes", {}).items():
+            if key.startswith("E") and key[1:].isdigit():
+                # data[1] is "Volumen actual" (current): {y: %, volumen: "hm3"}
+                current = val.get("data", [None, None])[1]
+                if current:
+                    result[key] = {
+                        "pct": current.get("y") if isinstance(current, dict) else current,
+                        "vol_hm3": float(current["volumen"]) if isinstance(current, dict) else None,
+                        "zona": val.get("zona", ""),
+                    }
+        print(f"  Got data for {len(result)} reservoirs")
+        return result
+    except Exception as e:
+        print(f"  Failed to fetch volumenes embalsados: {e}")
+        return {}
+
+
+def fetch_reservoir_info(reservoir, fallback_data=None):
     tag = reservoir["tag"]
     nivel_tag = reservoir.get("nivel_tag")
+    station = reservoir.get("station", "")
     print(f"--> Fetching info for {reservoir['name']} (tag={tag})")
 
     session = requests.Session()
@@ -122,8 +156,6 @@ def fetch_reservoir_info(reservoir):
             resp = session.post(data_url, json=payload, timeout=60)
 
             print("STATUS:", resp.status_code)
-            print("HEADERS:", resp.headers)
-            print("BODY:", resp.text[:1000])  # first 1000 chars
 
             if resp.status_code == 200:
                 data_json = resp.json()
@@ -145,6 +177,12 @@ def fetch_reservoir_info(reservoir):
                 print(f"  POST returned {resp.status_code} (expected from cloud IPs)")
     except Exception as e:
         print(f"  POST failed: {e}")
+
+    # Fallback: use getVolumenesEmbalsados data if POST failed
+    if latest_val is None and fallback_data and station in fallback_data:
+        fb = fallback_data[station]
+        latest_val = fb.get("pct")
+        print(f"  Using fallback % value: {latest_val}%")
 
     return {
         "name": reservoir["name"],
@@ -287,9 +325,12 @@ def main():
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
     print("=== SAIH Ebro & Cantabrico Daily Reservoir Report ===")
 
+    # Pre-fetch fallback data (works from cloud IPs)
+    fallback_data = fetch_volumenes_embalsados()
+
     results = []
     for reservoir in RESERVOIRS:
-        info = fetch_reservoir_info(reservoir)
+        info = fetch_reservoir_info(reservoir, fallback_data=fallback_data)
         results.append(info)
 
     # Fetch La Cohilla from SAIH Cantabrico
