@@ -253,12 +253,6 @@ def build_html(results):
         else:
             val_display = '<span style="color:#888;">Ver en SAIH</span>'
 
-        # Build nivel display for Oliana and Rialb
-        if r.get("latest_nivel") is not None:
-            nivel_display = f'<span style="font-size:18px;font-weight:bold;color:#1a6b3c;">{r["latest_nivel"]:.2f} msnm</span>'
-        else:
-            nivel_display = '<span style="color:#888;">-</span>'
-
         rows += f"""
         <tr>
             <td style="padding:12px;border:1px solid #ddd;">
@@ -267,9 +261,6 @@ def build_html(results):
             </td>
             <td style="padding:12px;border:1px solid #ddd;text-align:center;">
                 {val_display}
-            </td>
-            <td style="padding:12px;border:1px solid #ddd;text-align:center;">
-                {nivel_display}
             </td>
             <td style="padding:12px;border:1px solid #ddd;text-align:center;">
                 <a href="{r['url']}" style="color:#2a7ab5;text-decoration:none;font-weight:bold;">
@@ -289,7 +280,6 @@ def build_html(results):
         <tr style="background:#f0f0f0;">
             <th style="padding:10px;border:1px solid #ddd;text-align:left;">Embalse</th>
             <th style="padding:10px;border:1px solid #ddd;">% Volumen</th>
-            <th style="padding:10px;border:1px solid #ddd;">Nivel</th>
             <th style="padding:10px;border:1px solid #ddd;">Enlace</th>
         </tr>
         {rows}
