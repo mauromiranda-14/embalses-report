@@ -101,7 +101,7 @@ def fetch_volumenes_embalsados():
         return {}
 
 
-h(station, tag):
+def fetch_ficha_valor_actual(station, tag):
     """Fetch current value from the ficha endpoint (GET, works from cloud IPs).
 
     Uses /api/ficha/procesarTablaValoresActuales which returns HTML with
