@@ -27,7 +27,7 @@ HEADERS = {
 
 RESERVOIRS = [
     {
-        "name": "Rialb Embalse",
+        "name": "Rialb",
         "tag": "E076O82PORCE",
         "nivel_tag": "E076O17NEMBA",
         "station": "E076",
@@ -35,7 +35,7 @@ RESERVOIRS = [
         "url": "https://saihebro.org/tiempo-real/grafica-senal-E076O82PORCE--volumen-embalse-rialb",
     },
     {
-        "name": "Oliana SAI",
+        "name": "Oliana",
         "tag": "E062O82PORCE",
         "nivel_tag": "E062O17NEMBA",
         "station": "E062",
@@ -43,7 +43,7 @@ RESERVOIRS = [
         "url": "https://saihebro.org/tiempo-real/grafica-senal-E062O82PORCE--volumen-embalse-oliana",
     },
         {
-                    "name": "Bachimana Superior",
+                    "name": "Bachimaña superior - Baños",
                     "tag": "E034Z82PORCE",
                     "nivel_tag": None,
                     "station": "E034",
@@ -63,7 +63,7 @@ SAIH_CANTABRICO_HEADERS = {
 }
 
 LA_COHILLA = {
-    "name": "La Cohilla",
+    "name": "La Cohilla - Peña de Bejo",
     "codigo": "1253",
     "label": "% Llenado Embalse La Cohilla",
     "url": "https://visor.saichcantabrico.es/",
