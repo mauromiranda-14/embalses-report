@@ -41,6 +41,14 @@ RESERVOIRS = [
         "label": "% Volumen Embalse Oliana",
         "url": "https://saihebro.org/tiempo-real/grafica-senal-E062O82PORCE--volumen-embalse-oliana",
     },
+        {
+                    "name": "Bachimana Superior",
+                    "tag": "E034Z82PORCE",
+                    "nivel_tag": None,
+                    "station": "E034",
+                    "label": "% Volumen Embalse Bachimana Superior",
+                    "url": "https://saihebro.org/tiempo-real/grafica-senal-E034Z82PORCE-volumen-embalse-bachimana-superior",
+        },
 ]
 
 # -- SAIH Cantabrico Configuration
@@ -273,7 +281,7 @@ def build_html(results):
     html = f"""
     <html><body style="font-family:Arial,sans-serif;max-width:650px;margin:0 auto;">
     <div style="background:#2a7ab5;color:white;padding:15px;text-align:center;border-radius:8px 8px 0 0;">
-        <h2 style="margin:0;">Embalses Rialb, Oliana &amp; La Cohilla</h2>
+        <h2 style="margin:0;">Embalses Rialb, Oliana, Bachimana &amp; La Cohilla</h2>
         <p style="margin:5px 0 0 0;font-size:14px;">Informe Diario - {today_str}</p>
     </div>
     <table style="border-collapse:collapse;width:100%;margin-top:0;">
@@ -328,7 +336,7 @@ def main():
     results.append(cohilla_info)
 
     today_str = datetime.now().strftime("%d/%m/%Y")
-    subject = f"Embalses Rialb, Oliana & La Cohilla - {today_str}"
+    subject = f"Embalses Rialb, Oliana, Bachimana & La Cohilla - {today_str}"
     html = build_html(results)
     send_email(subject, html)
     print("=== Done ===")
