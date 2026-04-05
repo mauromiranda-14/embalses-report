@@ -6,6 +6,7 @@ from email.mime.text import MIMEText
 
 import requests
 import urllib3
+import re
 
 # -- Configuration
 EMAIL_SENDER  = os.environ["EMAIL_SENDER"]
@@ -103,6 +104,40 @@ def fetch_volumenes_embalsados():
 def fetch_reservoir_info(reservoir, fallback_data=None):
     tag = reservoir["tag"]
     nivel_tag = reservoir.get("nivel_tag")
+
+    def fetch_ficha_valor_actual(station, tag):
+            """Fetch current value from the ficha endpoint (GET, works from cloud IPs).
+
+                Uses /api/ficha/procesarTablaValoresActuales which returns HTML with
+                    the latest sensor values. We parse the aria-label to extract the
+                        percentage value for the given tag.
+                            """
+            url = f"{BASE_URL}/api/ficha/procesarTablaValoresActuales?estacion={station}"
+            print(f"  Trying ficha fallback for {station} (tag={tag})")
+            try:
+                        resp = requests.get(url, headers=HEADERS, timeout=30, verify=False)
+                        resp.raise_for_status()
+                        data = resp.json()
+                        html = data.get("VALORES_ACTUALES", "")
+                        # Look for the specific tag's value in aria-label attributes
+            # Pattern: aria-label='Valor 7,80 %' near the tag link
+            # Find the row that contains our tag
+            if tag in html:
+                            # Extract value from aria-label='Valor X,XX %'
+                            # Search after the tag occurrence for the value aria-label
+                            tag_pos = html.index(tag)
+                            section = html[tag_pos:tag_pos + 500]
+                            match = re.search(r"aria-label='Valor\s+([\d,.]+)\s+%'", section)
+                            if match:
+                                                val_str = match.group(1).replace(",", ".")
+                                                val = float(val_str)
+                                                print(f"  Got ficha value: {val}%")
+                                                return val
+                                        print(f"  Tag {tag} not found in ficha response")
+        return None
+except Exception as e:
+        print(f"  Ficha fallback failed: {e}")
+        return None
     station = reservoir.get("station", "")
     print(f"--> Fetching info for {reservoir['name']} (tag={tag})")
 
@@ -191,6 +226,10 @@ def fetch_reservoir_info(reservoir, fallback_data=None):
         fb = fallback_data[station]
         latest_val = fb.get("pct")
         print(f"  Using fallback % value: {latest_val}%")
+
+    # Secondary fallback: use ficha endpoint (GET, works from cloud IPs)
+    if latest_val is None and station:
+                latest_val = fetch_ficha_valor_actual(station, tag)
 
     return {
         "name": reservoir["name"],
