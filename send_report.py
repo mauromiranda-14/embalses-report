@@ -101,33 +101,33 @@ def fetch_volumenes_embalsados():
         return {}
 
 
-def fetch_ficha_valor_actual(station, tag):
-        """Fetch current value from the ficha endpoint (GET, works from cloud IPs).
+h(station, tag):
+    """Fetch current value from the ficha endpoint (GET, works from cloud IPs).
 
-            Uses /api/ficha/procesarTablaValoresActuales which returns HTML with
-                the latest sensor values. We parse the aria-label to extract the
-                    percentage value for the given tag.
-                        """
-        url = f"{BASE_URL}/api/ficha/procesarTablaValoresActuales?estacion={station}"
-        print(f"  Trying ficha fallback for {station} (tag={tag})")
-        try:
-                    resp = requests.get(url, headers=HEADERS, timeout=30, verify=False)
-                    resp.raise_for_status()
-                    data = resp.json()
-                    html = data.get("VALORES_ACTUALES", "")
-                    # Find the tag in the HTML and extract the percentage value
+    Uses /api/ficha/procesarTablaValoresActuales which returns HTML with
+    the latest sensor values. We parse the aria-label to extract the
+    percentage value for the given tag.
+    """
+    url = f"{BASE_URL}/api/ficha/procesarTablaValoresActuales?estacion={station}"
+    print(f"  Trying ficha fallback for {station} (tag={tag})")
+    try:
+        resp = requests.get(url, headers=HEADERS, timeout=30, verify=False)
+        resp.raise_for_status()
+        data = resp.json()
+        html = data.get("VALORES_ACTUALES", "")
+        # Find the tag in the HTML and extract the percentage value
         if tag in html:
-                        tag_pos = html.index(tag)
-                        section = html[tag_pos:tag_pos + 500]
-                        match = re.search(r"aria-label='Valor\s+([\d,.]+)\s+%'", section)
-                        if match:
-                                            val_str = match.group(1).replace(",", ".")
-                                            val = float(val_str)
-                                            print(f"  Got ficha value: {val}%")
-                                            return val
-                                    print(f"  Tag {tag} not found in ficha response")
+            tag_pos = html.index(tag)
+            section = html[tag_pos:tag_pos + 500]
+            match = re.search(r"aria-label='Valor\s+([\d,.]+)\s+%'", section)
+            if match:
+                val_str = match.group(1).replace(",", ".")
+                val = float(val_str)
+                print(f"  Got ficha value: {val}%")
+                return val
+        print(f"  Tag {tag} not found in ficha response")
         return None
-except Exception as e:
+    except Exception as e:
         print(f"  Ficha fallback failed: {e}")
         return None
 
