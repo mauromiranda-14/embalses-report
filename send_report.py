@@ -26,16 +26,8 @@ HEADERS = {
 }
 
 RESERVOIRS = [
-    {
-        "name": "Rialb",
-        "tag": "E076O82PORCE",
-        "nivel_tag": "E076O17NEMBA",
-        "station": "E076",
-        "label": "% Volumen Embalse Rialb",
-        "url": "https://saihebro.org/tiempo-real/grafica-senal-E076O82PORCE--volumen-embalse-rialb",
-    },
-    {
-        "name": "Oliana",
+{
+        "name": "Segre-Oliana",
         "tag": "E062O82PORCE",
         "nivel_tag": "E062O17NEMBA",
         "station": "E062",
@@ -43,7 +35,15 @@ RESERVOIRS = [
         "url": "https://saihebro.org/tiempo-real/grafica-senal-E062O82PORCE--volumen-embalse-oliana",
     },
         {
-                    "name": "Bachimaña superior - Baños",
+        "name": "Segre - Rialb (31 MW)",
+        "tag": "E076O82PORCE",
+        "nivel_tag": "E076O17NEMBA",
+        "station": "E076",
+        "label": "% Volumen Embalse Rialb",
+        "url": "https://saihebro.org/tiempo-real/grafica-senal-E076O82PORCE--volumen-embalse-rialb",
+    },
+        {
+                    "name": "Gállego-Bachimaña Superior - Baños (5.5 MW)",
                     "tag": "E034Z82PORCE",
                     "nivel_tag": None,
                     "station": "E034",
@@ -63,7 +63,7 @@ SAIH_CANTABRICO_HEADERS = {
 }
 
 LA_COHILLA = {
-    "name": "La Cohilla - Peña de Bejo",
+    "name": "Nansa - La Cohilla - Peña de Bejo (20.8 MW)",
     "codigo": "1253",
     "label": "% Llenado Embalse La Cohilla",
     "url": "https://visor.saichcantabrico.es/",
