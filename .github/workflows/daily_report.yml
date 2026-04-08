@@ -2,7 +2,7 @@ name: Daily Reservoir Report
 
 on:
   schedule:
-    - cron: '0 7 * * *'  # Every day at 07:00 UTC (09:00 Spain summer time)
+        - cron: '0 1 * * *' # Every day at 01:00 UTC (03:00 Spain summer time)
   workflow_dispatch:      # Allows manual trigger from the GitHub Actions tab
 
 jobs:
