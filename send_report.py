@@ -12,6 +12,7 @@ import re
 EMAIL_SENDER  = os.environ["EMAIL_SENDER"]
 EMAIL_PASSWORD = os.environ["EMAIL_PASSWORD"]
 EMAIL_RECEIVER = os.environ["EMAIL_RECEIVER"]
+EMAIL_RECEIVER_2 = os.environ.get("EMAIL_RECEIVER_2", "diego.garcia@elawan.com")
 SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com")
 SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
 
@@ -43,7 +44,7 @@ RESERVOIRS = [
         "url": "https://saihebro.org/tiempo-real/grafica-senal-E076O82PORCE--volumen-embalse-rialb",
     },
         {
-                    "name": "Gállego-Bachimaña Superior - Baños (5.5 MW)",
+                    "name": "GÃ¡llego-BachimaÃ±a Superior - BaÃ±os (5.5 MW)",
                     "tag": "E034Z82PORCE",
                     "nivel_tag": None,
                     "station": "E034",
@@ -63,7 +64,7 @@ SAIH_CANTABRICO_HEADERS = {
 }
 
 LA_COHILLA = {
-    "name": "Nansa - La Cohilla - Peña de Bejo (20.8 MW)",
+    "name": "Nansa - La Cohilla - PeÃ±a de Bejo (20.8 MW)",
     "codigo": "1253",
     "label": "% Llenado Embalse La Cohilla",
     "url": "https://visor.saichcantabrico.es/",
@@ -341,17 +342,18 @@ def build_html(results):
 
 
 def send_email(subject, html):
+    recipients = [r for r in [EMAIL_RECEIVER, EMAIL_RECEIVER_2] if r]
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"]    = EMAIL_SENDER
-    msg["To"]      = EMAIL_RECEIVER
+    msg["To"]      = ", ".join(recipients)
     msg.attach(MIMEText(html, "html"))
 
     with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
         server.starttls()
         server.login(EMAIL_SENDER, EMAIL_PASSWORD)
-        server.sendmail(EMAIL_SENDER, EMAIL_RECEIVER, msg.as_string())
-    print(f"  Email sent to {EMAIL_RECEIVER}")
+        server.sendmail(EMAIL_SENDER, recipients, msg.as_string())
+    print(f"  Email sent to {recipients}")
 
 
 def main():
