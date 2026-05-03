@@ -132,7 +132,7 @@ def fetch_ficha_valor_actual(station, tag):
         print(f"  Ficha fallback failed: {e}")
         return None
 
-def fetch_reservoir_info(reservoir, fallback_data=None):
+def fetch_reservoir_info(reservoir):
     tag = reservoir["tag"]
     nivel_tag = reservoir.get("nivel_tag")
     station = reservoir.get("station", "")
@@ -218,13 +218,8 @@ def fetch_reservoir_info(reservoir, fallback_data=None):
     except Exception as e:
         print(f"  POST failed: {e}")
 
-    # Fallback: use getVolumenesEmbalsados data if POST failed
-    if latest_val is None and fallback_data and station in fallback_data:
-        fb = fallback_data[station]
-        latest_val = fb.get("pct")
-        print(f"  Using fallback % value: {latest_val}%")
 
-    # Secondary fallback: use ficha endpoint (GET, works from cloud IPs)
+    # Fallback: use ficha endpoint (GET, works from cloud IPs)
     if latest_val is None and station:
                 latest_val = fetch_ficha_valor_actual(station, tag)
 
@@ -361,11 +356,10 @@ def main():
     print("=== SAIH Ebro & Cantabrico Daily Reservoir Report ===")
 
     # Pre-fetch fallback data (works from cloud IPs)
-    fallback_data = fetch_volumenes_embalsados()
 
     results = []
     for reservoir in RESERVOIRS:
-        info = fetch_reservoir_info(reservoir, fallback_data=fallback_data)
+        info = fetch_reservoir_info(reservoir)
         results.append(info)
 
     # Fetch La Cohilla from SAIH Cantabrico
