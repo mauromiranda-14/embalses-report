@@ -8,7 +8,7 @@ on:
 jobs:
   send-report:
     runs-on: ubuntu-22.04
-    timeout-minutes: 10
+    timeout-minutes: 40
 
     steps:
       - name: Checkout repository
