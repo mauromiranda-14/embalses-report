@@ -142,36 +142,44 @@ def fetch_reservoir_info(reservoir):
     session.headers.update(HEADERS)
     session.verify = False
 
-    # Establish session (get cookies like a browser)
-    session.get(reservoir["url"], timeout=30)
-
-    # Get metadata (date range + signal descriptions)
-    meta_url = f"{BASE_URL}/api/grafica/getMetaDatosSenalesEstacion?tag={tag}&cambio_periodo=7"
-    meta = session.get(meta_url, timeout=30)
-    meta.raise_for_status()
-    meta_json = meta.json()
-    fecha_ini = meta_json["fechaIni"]
-    fecha_fin = meta_json["fechaFin"]
-
-    # Find the percentage signal metadata
+    fecha_ini = None
+    fecha_fin = None
     pct_key = f"{tag}|VALOR"
-    pct_meta = meta_json["metaData"].get(pct_key)
-    if pct_meta is None:
-        for k, v in meta_json["metaData"].items():
-            if v.get("LS_UNID_ING") == "%":
-                pct_key = k
-                pct_meta = v
-                break
-
-    # Find the nivel signal metadata
+    pct_meta = None
     nivel_key = f"{nivel_tag}|VALOR" if nivel_tag else None
-    nivel_meta = meta_json["metaData"].get(nivel_key) if nivel_key else None
-    if nivel_meta is None and nivel_tag:
-        for k, v in meta_json["metaData"].items():
-            if v.get("LS_UNID_ING") == "msnm":
-                nivel_key = k
-                nivel_meta = v
-                break
+    nivel_meta = None
+
+    try:
+        # Establish session (get cookies like a browser)
+        session.get(reservoir["url"], timeout=30)
+
+        # Get metadata (date range + signal descriptions)
+        meta_url = f"{BASE_URL}/api/grafica/getMetaDatosSenalesEstacion?tag={tag}&cambio_periodo=7"
+        meta = session.get(meta_url, timeout=30)
+        meta.raise_for_status()
+        meta_json = meta.json()
+        fecha_ini = meta_json["fechaIni"]
+        fecha_fin = meta_json["fechaFin"]
+
+        # Find the percentage signal metadata
+        pct_meta = meta_json["metaData"].get(pct_key)
+        if pct_meta is None:
+            for k, v in meta_json["metaData"].items():
+                if v.get("LS_UNID_ING") == "%":
+                    pct_key = k
+                    pct_meta = v
+                    break
+
+        # Find the nivel signal metadata
+        nivel_meta = meta_json["metaData"].get(nivel_key) if nivel_key else None
+        if nivel_meta is None and nivel_tag:
+            for k, v in meta_json["metaData"].items():
+                if v.get("LS_UNID_ING") == "msnm":
+                    nivel_key = k
+                    nivel_meta = v
+                    break
+    except Exception as e:
+        print(f"  Could not reach {BASE_URL} (site may be slow/unreachable): {e}")
 
     # Try to get actual data via POST (may fail from cloud IPs)
     latest_val = None
@@ -218,10 +226,9 @@ def fetch_reservoir_info(reservoir):
     except Exception as e:
         print(f"  POST failed: {e}")
 
-
     # Fallback: use ficha endpoint (GET, works from cloud IPs)
     if latest_val is None and station:
-                latest_val = fetch_ficha_valor_actual(station, tag)
+        latest_val = fetch_ficha_valor_actual(station, tag)
 
     return {
         "name": reservoir["name"],
