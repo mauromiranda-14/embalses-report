@@ -7,6 +7,7 @@ from email.mime.text import MIMEText
 import requests
 import urllib3
 import re
+import time
 
 # -- Configuration
 EMAIL_SENDER  = os.environ["EMAIL_SENDER"]
@@ -102,6 +103,25 @@ def fetch_volumenes_embalsados():
         return {}
 
 
+def call_with_retries(func, *args, attempts=4, delays=(20, 40, 90), **kwargs):
+    """Call func(*args, **kwargs), retrying on network errors.
+
+    saihebro.org sometimes only accepts connections after a short wait, so
+    we retry a few times with growing pauses before giving up.
+    """
+    last_exc = None
+    for i in range(attempts):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            last_exc = e
+            if i < attempts - 1:
+                wait = delays[min(i, len(delays) - 1)]
+                print(f"    Attempt {i + 1}/{attempts} failed ({e}); waiting {wait}s before retry...")
+                time.sleep(wait)
+    raise last_exc
+
+
 def fetch_ficha_valor_actual(station, tag):
     """Fetch current value from the ficha endpoint (GET, works from cloud IPs).
 
@@ -112,7 +132,7 @@ def fetch_ficha_valor_actual(station, tag):
     url = f"{BASE_URL}/api/ficha/procesarTablaValoresActuales?estacion={station}"
     print(f"  Trying ficha fallback for {station} (tag={tag})")
     try:
-        resp = requests.get(url, headers=HEADERS, timeout=30, verify=False)
+        resp = call_with_retries(requests.get, url, headers=HEADERS, timeout=45, verify=False)
         resp.raise_for_status()
         data = resp.json()
         html = data.get("VALORES_ACTUALES", "")
@@ -129,8 +149,9 @@ def fetch_ficha_valor_actual(station, tag):
         print(f"  Tag {tag} not found in ficha response")
         return None
     except Exception as e:
-        print(f"  Ficha fallback failed: {e}")
+        print(f"  Ficha fallback failed after retries: {e}")
         return None
+
 
 def fetch_reservoir_info(reservoir):
     tag = reservoir["tag"]
@@ -150,12 +171,12 @@ def fetch_reservoir_info(reservoir):
     nivel_meta = None
 
     try:
-        # Establish session (get cookies like a browser)
-        session.get(reservoir["url"], timeout=30)
+        # Establish session (get cookies like a browser), retrying on timeouts
+        call_with_retries(session.get, reservoir["url"], timeout=45)
 
         # Get metadata (date range + signal descriptions)
         meta_url = f"{BASE_URL}/api/grafica/getMetaDatosSenalesEstacion?tag={tag}&cambio_periodo=7"
-        meta = session.get(meta_url, timeout=30)
+        meta = call_with_retries(session.get, meta_url, timeout=45)
         meta.raise_for_status()
         meta_json = meta.json()
         fecha_ini = meta_json["fechaIni"]
@@ -179,7 +200,7 @@ def fetch_reservoir_info(reservoir):
                     nivel_meta = v
                     break
     except Exception as e:
-        print(f"  Could not reach {BASE_URL} (site may be slow/unreachable): {e}")
+        print(f"  Could not reach {BASE_URL} after retries (site may be slow/unreachable): {e}")
 
     # Try to get actual data via POST (may fail from cloud IPs)
     latest_val = None
@@ -201,7 +222,7 @@ def fetch_reservoir_info(reservoir):
                 "tipoConsolidado": meta_json["tipoConsolidado"],
             }
             data_url = f"{BASE_URL}/api/datos-graficas/obtenerGraficaHistorica"
-            resp = session.post(data_url, json=payload, timeout=60)
+            resp = call_with_retries(session.post, data_url, json=payload, timeout=60)
 
             print("STATUS:", resp.status_code)
 
